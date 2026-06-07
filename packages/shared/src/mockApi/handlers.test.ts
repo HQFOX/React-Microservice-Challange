@@ -1,11 +1,16 @@
 import { cases } from './cases';
 import { vi } from 'vitest';
-import { casesHandler } from './handlers';
+import { casesHandler, caseHandler } from './handlers';
 import { HttpResponse } from 'msw';
 
 vi.mock('msw');
 vi.mock('./cases', () => ({
-  cases: new Array(50).fill(undefined).map((_, index) => index + 1),
+  cases: new Array(50).fill(undefined).map((_, index) => ({
+    identifier: String(index + 1),
+    assignee_id: 'user-1',
+    status: 'CASE_ON_HOLD',
+    name: `Case ${index + 1}`,
+  })),
 }));
 
 describe('cases handler', () => {
@@ -31,7 +36,7 @@ describe('cases handler', () => {
           next: '/api/cases?page_number=2',
           prev: '',
           self: '/api/cases?page_number=1',
-          total_count: 20,
+          total_count: 50,
         });
       });
     });
@@ -53,7 +58,7 @@ describe('cases handler', () => {
           next: '/api/cases?page_number=3',
           prev: '/api/cases?page_number=1',
           self: '/api/cases?page_number=2',
-          total_count: 20,
+          total_count: 50,
         });
       });
     });
@@ -75,7 +80,7 @@ describe('cases handler', () => {
           next: '',
           prev: '/api/cases?page_number=2',
           self: '/api/cases?page_number=3',
-          total_count: 10,
+          total_count: 50,
         });
       });
     });
@@ -97,7 +102,7 @@ describe('cases handler', () => {
           next: '',
           prev: '/api/cases?page_number=4',
           self: '/api/cases?page_number=5',
-          total_count: 10,
+          total_count: 50,
         });
       });
     });
@@ -168,8 +173,52 @@ describe('cases handler', () => {
       });
     });
 
+    describe('when page_number is negative', () => {
+      it('clamps to page 1', () => {
+        const url = new URL(
+          '/api/cases?page_number=-5&page_size=20',
+          'http://api.org/',
+        );
+        const request = new Request(url);
+
+        casesHandler({ request });
+
+        expect(HttpResponse.json).toHaveBeenCalledTimes(1);
+        expect(HttpResponse.json).toHaveBeenCalledWith({
+          cases: cases.slice(0, 20),
+          first: '/api/cases?page_number=1',
+          next: '/api/cases?page_number=2',
+          prev: '',
+          self: '/api/cases?page_number=1',
+          total_count: 50,
+        });
+      });
+    });
+
+    describe('when page_size is negative', () => {
+      it('clamps to page_size 1', () => {
+        const url = new URL(
+          '/api/cases?page_number=1&page_size=-5',
+          'http://api.org/',
+        );
+        const request = new Request(url);
+
+        casesHandler({ request });
+
+        expect(HttpResponse.json).toHaveBeenCalledTimes(1);
+        expect(HttpResponse.json).toHaveBeenCalledWith({
+          cases: cases.slice(0, 1),
+          first: '/api/cases?page_number=1',
+          next: '/api/cases?page_number=2',
+          prev: '',
+          self: '/api/cases?page_number=1',
+          total_count: 50,
+        });
+      });
+    });
+
     describe('when params not provided', () => {
-      it('defaults to page 1, size 25', () => {
+      it('defaults to page 1, size 10', () => {
         const url = new URL('/cases', 'http://api.org/');
         const request = new Request(url);
 
@@ -177,14 +226,41 @@ describe('cases handler', () => {
 
         expect(HttpResponse.json).toHaveBeenCalledTimes(1);
         expect(HttpResponse.json).toHaveBeenCalledWith({
-          cases: cases.slice(0, 25),
+          cases: cases.slice(0, 10),
           first: '/api/cases?page_number=1',
           next: '/api/cases?page_number=2',
           prev: '',
           self: '/api/cases?page_number=1',
-          total_count: 25,
+          total_count: 50,
         });
       });
+    });
+  });
+});
+
+describe('caseHandler', () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  describe('when the case exists', () => {
+    it('returns the matching case', () => {
+      caseHandler({ params: { id: '1' } });
+
+      expect(HttpResponse.json).toHaveBeenCalledTimes(1);
+      expect(HttpResponse.json).toHaveBeenCalledWith(cases[0]);
+    });
+  });
+
+  describe('when the case does not exist', () => {
+    it('returns a 404 response', () => {
+      caseHandler({ params: { id: 'non-existent-id' } });
+
+      expect(HttpResponse.json).toHaveBeenCalledTimes(1);
+      expect(HttpResponse.json).toHaveBeenCalledWith(
+        { message: 'Not found' },
+        { status: 404 },
+      );
     });
   });
 });

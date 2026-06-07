@@ -1,7 +1,9 @@
-import { Box, Heading } from 'theme-ui';
+import { Box } from 'theme-ui';
+
+import { CaseTable } from '../../components';
 
 export const CaseListView = () => (
   <Box>
-    <Heading>Cases</Heading>
+    <CaseTable />
   </Box>
 );
